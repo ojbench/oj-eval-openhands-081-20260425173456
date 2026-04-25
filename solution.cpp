@@ -4,11 +4,10 @@
 #include <queue>
 #include <algorithm>
 #include <numeric>
-#include <unordered_map>
 
 using namespace std;
 
-class CorrectOptimizedMaxFlow {
+class FinalOptimizedMaxFlow {
 private:
     int n;
     vector<vector<int>> adj;
@@ -34,7 +33,7 @@ private:
         }
     };
     
-    // Correct max flow computation using edge-disjoint paths
+    // Optimized max flow computation
     int compute_max_flow(int a, int b) {
         vector<bool> used_edge(edges.size(), false);
         int flow = 0;
@@ -92,8 +91,30 @@ private:
         return edge_count == comp.size() - 1;
     }
     
+    // Precompute all pairs max flow for a component
+    vector<vector<int>> precompute_component_flows(const vector<int>& comp) {
+        int k = comp.size();
+        vector<vector<int>> flows(k, vector<int>(k, 0));
+        
+        // Create mapping from original node to component index
+        vector<int> node_to_idx(n, -1);
+        for (int i = 0; i < k; i++) {
+            node_to_idx[comp[i]] = i;
+        }
+        
+        // Compute flows for all pairs
+        for (int i = 0; i < k; i++) {
+            for (int j = i + 1; j < k; j++) {
+                int flow = compute_max_flow(comp[i], comp[j]);
+                flows[i][j] = flows[j][i] = flow;
+            }
+        }
+        
+        return flows;
+    }
+    
 public:
-    CorrectOptimizedMaxFlow(int n) : n(n) {
+    FinalOptimizedMaxFlow(int n) : n(n) {
         adj.resize(n);
         edge_id.resize(n, vector<int>(n, -1));
     }
@@ -136,35 +157,13 @@ public:
                 long long pairs = (long long)comp.size() * (comp.size() - 1) / 2;
                 total_flow += pairs;
             } else {
-                // Non-tree component: compute flows individually
-                // But limit computation for very large components
-                if (comp.size() <= 100) {
-                    // Small enough to compute exactly
-                    for (int idx1 = 0; idx1 < comp.size(); idx1++) {
-                        for (int idx2 = idx1 + 1; idx2 < comp.size(); idx2++) {
-                            int u = comp[idx1];
-                            int v = comp[idx2];
-                            total_flow += compute_max_flow(u, v);
-                        }
-                    }
-                } else {
-                    // Very large component - sample some pairs to estimate
-                    // This is a fallback to avoid TLE
-                    int sample_size = min(50, (int)comp.size());
-                    long long sample_sum = 0;
-                    
-                    for (int i = 0; i < sample_size; i++) {
-                        for (int j = i + 1; j < sample_size; j++) {
-                            sample_sum += compute_max_flow(comp[i], comp[j]);
-                        }
-                    }
-                    
-                    // Estimate total based on sample
-                    long long sample_pairs = (long long)sample_size * (sample_size - 1) / 2;
-                    long long total_pairs = (long long)comp.size() * (comp.size() - 1) / 2;
-                    
-                    if (sample_pairs > 0) {
-                        total_flow += sample_sum * total_pairs / sample_pairs;
+                // Non-tree component: compute all pairs exactly
+                // Since degree ≤ 3, even large components are manageable
+                auto flows = precompute_component_flows(comp);
+                
+                for (int i = 0; i < comp.size(); i++) {
+                    for (int j = i + 1; j < comp.size(); j++) {
+                        total_flow += flows[i][j];
                     }
                 }
             }
@@ -183,7 +182,7 @@ int main() {
     int n, m;
     cin >> n >> m;
     
-    CorrectOptimizedMaxFlow solver(n);
+    FinalOptimizedMaxFlow solver(n);
     
     for (int i = 0; i < m; i++) {
         int u, v;
